@@ -1,107 +1,99 @@
-import React, { Component } from 'react'
-import * as BooksAPI from './BooksAPI'
-import { Link, Route } from 'react-router-dom';
-import './App.css'
-import BookShelf from './BookShelf';
-import SearchBooks from './SearchBooks';
-
-const shelves = {
-  currentlyReading: "currentlyReading",
-  wantToRead: "wantToRead",
-  read: "read",
-}
+import React, { Component } from "react";
+import { Route } from "react-router-dom";
+import "./App.css";
+import * as BooksAPI from "./BooksAPI";
+import BookList from "./BookList";
+import SearchBooks from "./SearchBooks";
 
 class BooksApp extends Component {
   state = {
-    /**
-     * TODO: Instead of using this state variable to keep track of which page
-     * we're on, use the URL in the browser's address bar. This will ensure that
-     * users can use the browser's back and forward buttons to navigate between
-     * pages, as well as provide a good URL they can bookmark and share.
-     */
     books: [],
-    currentlyReadingBooks: [], 
-    wantToReadBooks: [],
-    readBooks: [],
-  }
+    query: "",
+    queryResults: []
+  };
 
   componentDidMount() {
-    BooksAPI.getAll().then(books => {
-      const currentlyReadingBooks = books.filter(book => {
-        return book.shelf === shelves.currentlyReading;
-      });
+    this.getAllBooks();
+  }
 
-      const wantToReadBooks = books.filter(book => {
-        return book.shelf === shelves.wantToRead;
-      });
-
-      const readBooks = books.filter(book => {
-        return book.shelf === shelves.read;
-      });
-
-      this.setState({ allBooks: books, currentlyReadingBooks, wantToReadBooks, readBooks });
+  getAllBooks() {
+    return BooksAPI.getAll().then(books => {
+      this.setState({ books });
     });
   }
 
-  moveBook = (book, shelf) => {
-    BooksAPI.update(book, shelf).then(updatedBook => {
-      const oldShelf = book.shelf;
-      
-      book.shelf = shelf;
-
-      this.setState(state => {
-        const newState = {};
-
-        newState[`${shelf}Books`] = state[`${shelf}Books`].concat([book]);
-        newState[`${oldShelf}Books`] = state[`${oldShelf}Books`].filter(shelfBook => {
-          return shelfBook.id !== book.id;
-        });
-
-        return newState;
+  moveBook(bookToMove, shelf) {
+    return BooksAPI.update(bookToMove, shelf).then(updatedBook => {
+      return this.getAllBooks().then(() => {
+        return Promise.resolve(updatedBook);
       });
     });
   }
 
-  searchBooks = (query) => {
+  searchBooks(query) {
     if (query) {
-      BooksAPI.search(query).then((results) => {
-        const books = results.error ? [] : results;
-        this.setState({ books });
+      BooksAPI.search(query).then(results => {
+        const queryResults = results.error ? [] : results;
+        this.setState({ queryResults });
       });
     } else {
-      this.setState({ books: [] });
+      this.setState({ queryResults: [] });
     }
   }
 
+  updateQuery(query) {
+    this.setState({ query: query.trim() });
+
+    this.searchBooks(query);
+  }
+
   render() {
-    const { books, currentlyReadingBooks, wantToReadBooks, readBooks } = this.state;
+    const { books, query, queryResults } = this.state;
 
     return (
       <div className="app">
-        <Route exact path="/" render={() => (
-          <div className="list-books">
-              <div className="list-books-title">
-                <h1>MyReads</h1>
-              </div>
-              <div className="list-books-content">
-                <div>
-                  <BookShelf title="Currently Reading" books={currentlyReadingBooks} onMoveBook={this.moveBook} />
-                  <BookShelf title="Want to Read" books={wantToReadBooks} onMoveBook={this.moveBook} />
-                  <BookShelf title="Read" books={readBooks} onMoveBook={this.moveBook} />
-                </div>
-              </div>
-              <div className="open-search">
-                <Link to="/search">Add a book</Link>
-              </div>
-            </div>
-        )} />
+        <Route
+          exact
+          path="/"
+          render={() => (
+            <BookList
+              books={books}
+              onMoveBook={(book, shelf) => this.moveBook(book, shelf)}
+            />
+          )}
+        />
 
-        <Route path="/search" render={() => (
-          <SearchBooks books={books} onSearchBooks={this.searchBooks} />
-          )} />
+        <Route
+          path="/search"
+          render={() => (
+            <SearchBooks
+              books={books}
+              query={query}
+              queryResults={queryResults}
+              onMoveBook={(bookToMove, shelf) => {
+                this.moveBook(bookToMove, shelf).then(updatedBook => {
+                  const updatedBooks = queryResults.slice(0);
+
+                  const movedBook = updatedBooks.find(
+                    book => book.id === updatedBook.id
+                  );
+
+                  if (movedBook) {
+                    movedBook.shelf = shelf;
+                  }
+
+                  this.setState({ queryResults: updatedBooks });
+                });
+              }}
+              onUpdateQuery={query => {
+                this.updateQuery(query);
+              }}
+            />
+          )}
+        />
       </div>
-    )
+    );
   }
 }
 
-export default BooksApp
+export default BooksApp;
