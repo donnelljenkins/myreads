@@ -32,8 +32,7 @@ class BooksApp extends Component {
 
   searchBooks(query) {
     if (query) {
-      BooksAPI.search(query).then(results => {
-        const queryResults = results.error ? [] : results;
+      BooksAPI.search(query).then(queryResults => {
         this.setState({ queryResults });
       });
     } else {
